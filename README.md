@@ -22,9 +22,9 @@ Required
 - CMake (3.14 or higher)
 - OpenSSL (for SHA-1 hashing)
 
-Downloaded Automatically
+Included
 - FTXUI - for TUI
-- CPR - for network requests
+- CPR - for HTTP requests
 
 ## Dependencies Installation
 

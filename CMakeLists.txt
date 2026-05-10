@@ -13,34 +13,22 @@ find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Threads REQUIRED)
 
-find_package(cpr QUIET)
+set(EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
 
-if(cpr_FOUND)
-    message(STATUS "Using system CPR")
+set(cpr_SOURCE_DIR ${EXTERNAL_DIR}/cpr)
+if(EXISTS ${cpr_SOURCE_DIR}/CMakeLists.txt)
+    message(STATUS "Using local CPR from external/cpr")
+    add_subdirectory(${cpr_SOURCE_DIR})
 else()
-    message(STATUS "System CPR not found, downloading...")
-    
-    include(FetchContent)
-    
-    cmake_policy(SET CMP0135 NEW)
-    
-    FetchContent_Declare(
-        cpr
-        GIT_REPOSITORY https://github.com/libcpr/cpr.git
-        GIT_TAG 1.10.5
-        GIT_SHALLOW TRUE
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    
-    FetchContent_MakeAvailable(cpr)
+    message(FATAL_ERROR "Cannot proceed: CPR not found in external/cpr.")
 endif()
 
-include(FetchContent)
-FetchContent_Declare(
-    ftxui
-    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
-    GIT_TAG v5.0.0
-)
-FetchContent_MakeAvailable(ftxui)
+set(ftxui_SOURCE_DIR ${EXTERNAL_DIR}/ftxui)
+if(EXISTS ${ftxui_SOURCE_DIR}/CMakeLists.txt)
+    message(STATUS "Using local FTXUI from external/ftxui")
+    add_subdirectory(${ftxui_SOURCE_DIR})
+else()
+    message(FATAL_ERROR "Cannot proceed: FTXUI not found in external/ftxui.")
+endif()
 
 add_subdirectory(src)
