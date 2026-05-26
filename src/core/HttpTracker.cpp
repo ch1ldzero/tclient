@@ -1,8 +1,10 @@
 #include "core/HttpTracker.hpp"
 
-#include <cpr/cpr.h>
+#include <stdexcept>
+#include <map>
 
 #include "core/UdpTracker.hpp"
+#include "net/HttpClient.hpp"
 #include "utils/BencodeParser.hpp"
 
 HttpTracker::HttpTracker(const std::string& url) : tracker_url(url) {}
@@ -98,31 +100,20 @@ void HttpTracker::UpdatePeersHttp(
     int port,
     const std::string& url
 ) {
-    cpr::Response tracker_response = cpr::Get(
-        cpr::Url{url},
-        cpr::Parameters{
-            {"info_hash", torrent_file.info_hash},
-            {"peer_id", peer_id},
-            {"port", std::to_string(port)},
-            {"uploaded", "0"},
-            {"downloaded", "0"},
-            {"left", std::to_string(torrent_file.length)},
-            {"compact", "1"}
-        },
-        cpr::Timeout{10000},
-        cpr::ConnectTimeout{5000}
-    );
 
-    if (tracker_response.status_code != 200) {
-        throw std::runtime_error(
-            "HTTP " +
-            std::to_string(tracker_response.status_code) +
-            ": " +
-            tracker_response.error.message
-        );
-    }
+    const HttpClient client;
+    std::map<std::string, std::string> params = {
+        {"info_hash", torrent_file.info_hash},
+        {"peer_id", peer_id},
+        {"port", std::to_string(port)},
+        {"uploaded", "0"},
+        {"downloaded", "0"},
+        {"left", std::to_string(torrent_file.length)},
+        {"compact", "1"}
+    };
 
-    ParseTrackerResponse(tracker_response.text, url);
+    std::string response = client.Get(url, params);
+    ParseTrackerResponse(response, url);
 }
 
 void HttpTracker::UpdatePeersUdp(

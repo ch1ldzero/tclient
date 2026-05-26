@@ -6,6 +6,7 @@ add_library(core STATIC
     core/TorrentFile.cpp
     core/TorrentTask.cpp
     core/UdpTracker.cpp
+    net/HttpClient.cpp
     net/Message.cpp
     net/PeerConnection.cpp
     net/TcpConnection.cpp
@@ -27,8 +28,6 @@ target_include_directories(core PUBLIC
 target_link_libraries(core PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
-    CURL::libcurl
-    cpr::cpr
 )
 
 add_executable(simple-torrent-tui

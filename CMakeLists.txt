@@ -10,18 +10,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(OpenSSL REQUIRED)
-find_package(CURL REQUIRED)
 find_package(Threads REQUIRED)
 
 set(EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
-
-set(cpr_SOURCE_DIR ${EXTERNAL_DIR}/cpr)
-if(EXISTS ${cpr_SOURCE_DIR}/CMakeLists.txt)
-    message(STATUS "Using local CPR from external/cpr")
-    add_subdirectory(${cpr_SOURCE_DIR})
-else()
-    message(FATAL_ERROR "Cannot proceed: CPR not found in external/cpr.")
-endif()
 
 set(ftxui_SOURCE_DIR ${EXTERNAL_DIR}/ftxui)
 if(EXISTS ${ftxui_SOURCE_DIR}/CMakeLists.txt)

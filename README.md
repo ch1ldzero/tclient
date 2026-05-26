@@ -7,8 +7,7 @@ The project features a **multi-threaded architecture** and a **text-based user i
 This project originally started as a university assignment and is now being refactored and improved.
 
 **Note 2:**
-HTTP tracker communation is implemented using CPR library.
-All other networking operations (UDP tracker communation, peer-to-peer communication, and piece downloading from peers) are implemented using plain POSIX sockets.
+All networking operations (HTTP and UDP tracker communation, peer-to-peer communication, and piece downloading from peers) are implemented using plain POSIX sockets.
 
 ## Screenshots
 ![Download In Progress](assets/images/downloading.png)
@@ -29,7 +28,6 @@ Required
 
 Included
 - FTXUI - for TUI
-- CPR - for HTTP requests
 
 ## Dependencies Installation
 
