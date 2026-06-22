@@ -1,16 +1,16 @@
 #pragma once
 
-#include <chrono>
 #include <string>
 #include <vector>
 
-#include "core/TorrentTask.hpp"
+#include "core/TorrentSnapshot.hpp"
+
+namespace tclient {
 
 class UiRenderer {
 public:
     void Render(
-        const TorrentTask& task,
-        std::chrono::seconds elapsed,
+        const TorrentSnapshot& snapshot,
         const std::vector<std::string>& logs
     ) const;
 
@@ -21,4 +21,6 @@ private:
 private:
     static void ClearScreen();
 };
+
+} // namespace tclient
 

@@ -7,8 +7,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "core/Piece.hpp"
 #include "core/TorrentFile.hpp"
+#include "storage/Piece.hpp"
+
+namespace tclient {
 
 class PieceStorage {
 public:
@@ -19,11 +21,11 @@ public:
 
     PiecePtr GetNextPieceToDownload();
     void PieceProcessed(const PiecePtr& piece);
-    void Enqueue(const PiecePtr& piece);
+    void ReturnPiece(const PiecePtr& piece);
     bool QueueIsEmpty() const;
     bool IsPieceAlreadySaved(size_t piece_index) const;
     size_t TotalPiecesCount() const;
-    size_t PiecesSavedToDiscCount() const;
+    size_t PiecesSavedToDiskCount() const;
 
     void CloseOutputFile();
     bool IsDownloadComplete() const;
@@ -32,13 +34,10 @@ public:
     void ForceRequeueMissingPieces();
 
 private:
-    void SavePieceToDisk(const PiecePtr& piece);
-    void InitializeOutputFile();
-
     std::queue<PiecePtr> remaining_pieces_queue;
     mutable std::mutex queue_mutex;
 
-    std::ofstream file;
+    std::ofstream output_file;
     mutable std::mutex file_mutex;
 
     std::unordered_set<size_t> saved_pieces;
@@ -48,5 +47,11 @@ private:
     size_t default_piece_length;
     size_t total_piece_count;
     TorrentFile torrent_file;
+
+private:
+    void SavePieceToDisk(const PiecePtr& piece);
+    void InitializeOutputFile();
 };
+
+} // namespace tclient
 

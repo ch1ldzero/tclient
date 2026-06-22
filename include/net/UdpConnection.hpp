@@ -1,26 +1,33 @@
 #pragma once
 
-#include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
-#include <cstdint>
+#include <chrono>
 #include <string>
+#include <string_view>
+
+namespace tclient {
 
 class UdpConnection {
 public:
-    UdpConnection(const std::string& host, int port, int timeout_sec = 10);
+    UdpConnection(std::string_view host, int port);
     ~UdpConnection();
 
-    std::string SendReceive(const std::string& data);
-    uint64_t GenerateTransactionId();
+    void Send(std::string_view data);
+    std::string Receive();
 
 private:
-    int socket_fd;
+    static constexpr std::chrono::seconds kTimeout = std::chrono::seconds(5);
+
+    int socket_fd = -1;
     struct sockaddr_in server_address;
+
     std::string host;
     int port;
-    int timeout_sec;
 };
+
+} // namespace tclient
 

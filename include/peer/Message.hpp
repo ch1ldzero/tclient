@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
+
+namespace tclient {
 
 enum class MessageId : uint8_t {
     kChoke = 0,
@@ -22,8 +25,10 @@ struct Message {
     size_t message_length;
     std::string payload;
 
-    static Message Parse(const std::string& message_string);
-    static Message Init(MessageId id, const std::string& payload);
+    static Message Parse(std::string_view message_string);
+    static Message Init(MessageId id, std::string_view payload);
     std::string ToString() const;
 };
+
+} // namespace tclient
 

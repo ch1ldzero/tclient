@@ -1,4 +1,8 @@
+#pragma once
+
 #include <string>
+
+namespace tclient {
 
 struct Block {
     static constexpr size_t kSize = 1 << 14; // 16KB
@@ -12,7 +16,9 @@ struct Block {
     size_t piece;
     size_t offset;
     size_t length;
-    Status status;
+    Status status = Status::kMissing;
     std::string data;
 };
+
+} // namespace tclient
 

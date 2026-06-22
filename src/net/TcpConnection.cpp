@@ -1,28 +1,58 @@
 #include "net/TcpConnection.hpp"
 
+#include <netinet/tcp.h>
+
 #include <cstdio>
+#include <cstring>
 
 #include "utils/byte_tools.hpp"
 
+namespace tclient {
+
 TcpConnection::TcpConnection(
-    std::string ip,
-    int port,
-    std::chrono::milliseconds connect_timeout,
-    std::chrono::milliseconds read_timeout
+    std::string_view ip,
+    int port
 ) :
-      ip(std::move(ip)),
-      port(port),
-      connect_timeout(connect_timeout),
-      read_timeout(read_timeout),
-      socket_fd(-1)
+    ip(ip),
+    port(port),
+    socket_fd(-1)
 {}
 
 TcpConnection::~TcpConnection() {
     CloseConnection();
 }
 
+void TcpConnection::SetNonBlocking(bool enable) {
+    int flags = fcntl(socket_fd, F_GETFL, 0);
+    if (enable) {
+        fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
+    } else {
+        fcntl(socket_fd, F_SETFL, flags & ~O_NONBLOCK);
+    }
+}
+
+void TcpConnection::WaitForConnection(int fd, fd_set* fdset, struct timeval& tv) {
+    int code = select(fd + 1, nullptr, fdset, nullptr, &tv);
+
+    if (code == 0) {
+        close(socket_fd);
+        socket_fd = -1;
+        throw std::runtime_error("Connection timeout");
+    }
+
+    int so_error;
+    socklen_t len = sizeof(so_error);
+    getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
+    if (so_error != 0) {
+        close(socket_fd);
+        socket_fd = -1;
+        throw std::runtime_error("Socket connection error");
+    }
+}
+
 void TcpConnection::CloseConnection() {
-    force_close.store(true);
+    is_force_closed.store(true);
     if (socket_fd != -1) {
         shutdown(socket_fd, SHUT_RDWR);
         close(socket_fd);
@@ -31,11 +61,11 @@ void TcpConnection::CloseConnection() {
 }
 
 bool TcpConnection::IsTerminated() const {
-    return force_close.load();
+    return is_force_closed.load();
 }
 
 void TcpConnection::ForceClose() {
-    force_close.store(true);
+    is_force_closed.store(true);
     if (socket_fd != -1) {
         close(socket_fd);
         socket_fd = -1;
@@ -43,7 +73,7 @@ void TcpConnection::ForceClose() {
 }
 
 void TcpConnection::EstablishConnection() {
-    force_close.store(false);
+    is_force_closed.store(false);
 
     if (socket_fd != -1) {
         close(socket_fd);
@@ -52,40 +82,32 @@ void TcpConnection::EstablishConnection() {
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1) {
         throw std::runtime_error(
-            "Failed to create socket: " +
-            std::string(strerror(errno))
+            "Failed to create socket: " + std::string(strerror(errno))
         );
     }
 
-    int buffer_size = 512 * 1024;
-    
-    setsockopt(
-        socket_fd,
-        SOL_SOCKET,
-        SO_RCVBUF,
-        &buffer_size,
-        sizeof(buffer_size)
-    );
+    int flag = 1;
+    setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+    setsockopt(socket_fd, SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
 
-    setsockopt(
-        socket_fd,
-        SOL_SOCKET,
-        SO_SNDBUF,
-        &buffer_size,
-        sizeof(buffer_size)
-    );
+    int keepidle = 30;
+    int keepintvl = 10;
+    int keepcnt = 3;
+    setsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+    setsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+    setsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+
+    int buffer_size = 2 * 1024 * 1024;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
+    setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
 
     struct sockaddr_in server;
     server.sin_addr.s_addr = inet_addr(ip.c_str());
     server.sin_family = AF_INET;
-    server.sin_port = htons(port);
+    server.sin_port = htons(static_cast<uint16_t>(port));
 
-    fd_set fdset;
-    struct timeval time_val;
+    SetNonBlocking(true);
 
-    int current_state = fcntl(socket_fd, F_GETFL, 0);
-    fcntl(socket_fd, F_SETFL, current_state | O_NONBLOCK);
-    
     int code = connect(
         socket_fd,
         reinterpret_cast<struct sockaddr*>(&server),
@@ -93,133 +115,155 @@ void TcpConnection::EstablishConnection() {
     );
 
     if (code == 0) {
-        current_state = fcntl(socket_fd, F_GETFL, 0);
-        fcntl(socket_fd, F_SETFL, current_state & ~O_NONBLOCK);
+        SetNonBlocking(false);
         return;
     }
 
+    fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(socket_fd, &fdset);
-    
-    time_val.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(
-        connect_timeout
-    ).count();
-    
+
+    struct timeval time_val;
+    time_val.tv_sec =
+        std::chrono::duration_cast<std::chrono::seconds>(kConnectTimeout).count();
     time_val.tv_usec = 0;
 
-    code = select(socket_fd + 1, nullptr, &fdset, nullptr, &time_val);
-    
-    switch (code) {
-
-    case 0:
-        close(socket_fd);
-        socket_fd = -1;
-        throw std::runtime_error("Connection timeout");
-        break;
-
-    case 1:
-    default: {
-        int so_error;
-        socklen_t len = sizeof(so_error);
-        getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-
-        if (so_error == 0) {
-            current_state = fcntl(socket_fd, F_GETFL, 0);
-            fcntl(socket_fd, F_SETFL, current_state & ~O_NONBLOCK);
-            return;
-        }
-
-        close(socket_fd);
-        socket_fd = -1;
-        throw std::runtime_error("Socket connection error");
-        break;
-    }
-    
-    }
+    WaitForConnection(socket_fd, &fdset, time_val);
+    SetNonBlocking(false);
 }
 
-void TcpConnection::SendData(const std::string& data) const {
-    if (force_close.load() || socket_fd == -1) {
+void TcpConnection::SendData(std::string_view data) const {
+    if (is_force_closed.load() || socket_fd == -1) {
         throw std::runtime_error("Connection closed");
     }
 
-    if ((send(socket_fd, data.data(), data.size(), 0)) < 0) {
-        throw std::runtime_error("Send error");
-    }
-}
-
-std::string TcpConnection::ReceiveData(size_t buffer_size) const {
-    if (force_close.load() || socket_fd == -1) {
-        throw std::runtime_error("Connection closed");
-    }
-
-    std::string message;
-    if (buffer_size == 0) {
-        struct pollfd fd;
-        fd.fd = socket_fd;
-        fd.events = POLLIN;
-        int code = poll(&fd, 1, read_timeout.count());
-
-        if (force_close.load()) {
-            throw std::runtime_error("Connection terminated");
+    size_t total_sent = 0;
+    while (total_sent < data.size()) {
+        if (is_force_closed.load()) {
+            throw std::runtime_error("Connection terminated during send");
         }
 
-        switch (code) {
+        ssize_t sent = send(
+            socket_fd,
+            data.data() + total_sent,
+            data.size() - total_sent,
+            MSG_NOSIGNAL
+        );
 
-        case -1:
-            if (!force_close.load()) {
-                throw std::runtime_error("Poll error");
-            }
-            throw std::runtime_error("Connection terminated");
-            break;
-
-        case 0:
-            return "";
-            break;
-
-        default: {
-            char data[4];
-            int received = recv(socket_fd, data, sizeof(data), 0);
-            if (received <= 0) {
-                if (!force_close.load()) {
-                    throw std::runtime_error("Read error");
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd;
+                pfd.fd = socket_fd;
+                pfd.events = POLLOUT;
+                int ret = poll(&pfd, 1, static_cast<int>(kReadTimeout.count()));
+                if (ret <= 0 || is_force_closed.load()) {
+                    throw std::runtime_error(
+                        "Send timeout or connection terminated"
+                    );
                 }
-                throw std::runtime_error("Connection terminated");
+                continue;
             }
-            message.append(data, received);
-            break;
+            throw std::runtime_error("Send error: " + std::string(strerror(errno)));
         }
 
+        total_sent += static_cast<size_t>(sent);
+    }
+}
+
+std::string TcpConnection::ReceiveExactBytes(size_t num_bytes) const {
+    std::string result;
+    result.resize(num_bytes);
+    size_t total_received = 0;
+
+    while (total_received < num_bytes) {
+        if (is_force_closed.load()) {
+            throw std::runtime_error("Connection terminated during receive");
         }
 
-        buffer_size = utils::bytes_to_int32_t(message);
-    }
+        struct pollfd pfd;
+        pfd.fd = socket_fd;
+        pfd.events = POLLIN;
+        int ret = poll(&pfd, 1, static_cast<int>(kReadTimeout.count()));
 
-    if (buffer_size > 100'000) {
-        throw std::runtime_error("Too much data");
-    }
-
-    int to_read = buffer_size;
-    while (to_read > 0) {
-        if (force_close.load()) {
+        if (is_force_closed.load()) {
             throw std::runtime_error("Connection terminated");
         }
 
-        static constexpr size_t kBufferSize = 64 * 1024;
-        char buffer[kBufferSize];
-        int read_size = std::min(static_cast<int>(kBufferSize), to_read);
+        if (ret == -1) {
+            throw std::runtime_error("Poll error: " + std::string(strerror(errno)));
+        }
 
-        int received = recv(socket_fd, buffer, read_size, 0);
+        if (ret == 0) {
+            throw std::runtime_error("Receive timeout");
+        }
+
+        ssize_t received = recv(
+            socket_fd,
+            result.data() + total_received,
+            num_bytes - total_received,
+            0
+        );
+
         if (received <= 0) {
-            if (!force_close.load()) {
-                throw std::runtime_error("Read error");
+            if (received == 0) {
+                throw std::runtime_error("Connection closed by peer");
             }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            throw std::runtime_error("Read error: " + std::string(strerror(errno)));
+        }
+
+        total_received += static_cast<size_t>(received);
+    }
+
+    return result;
+}
+
+std::string TcpConnection::ReceiveData(size_t expected_size) const {
+    if (is_force_closed.load() || socket_fd == -1) {
+        throw std::runtime_error("Connection closed");
+    }
+
+    size_t message_size = expected_size;
+    std::string message;
+
+    if (message_size == 0) {
+        struct pollfd pfd;
+        pfd.fd = socket_fd;
+        pfd.events = POLLIN;
+        int ret = poll(&pfd, 1, static_cast<int>(kReadTimeout.count()));
+
+        if (is_force_closed.load()) {
             throw std::runtime_error("Connection terminated");
         }
 
-        message.append(buffer, received);
-        to_read -= received;
+        if (ret == -1) {
+            throw std::runtime_error("Poll error: " + std::string(strerror(errno)));
+        }
+
+        if (ret == 0) {
+            return "";
+        }
+
+        std::string header = ReceiveExactBytes(4);
+        message_size = static_cast<size_t>(bytes_to_int32(header));
+
+        if (message_size == 0) {
+            return header;
+        }
+
+        message = std::move(header);
     }
+
+    if (message_size > kMaxMessageSize) {
+        throw std::runtime_error(
+            "Message too large: " + std::to_string(message_size) + " bytes"
+        );
+    }
+
+    std::string body = ReceiveExactBytes(message_size);
+    message += std::move(body);
 
     return message;
 }
@@ -231,4 +275,6 @@ const std::string& TcpConnection::GetIp() const {
 int TcpConnection::GetPort() const {
     return port;
 }
+
+} // namespace tclient
 

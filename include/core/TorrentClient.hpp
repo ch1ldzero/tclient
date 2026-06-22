@@ -1,100 +1,54 @@
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <filesystem>
+#include <memory>
 #include <mutex>
+#include <random>
+#include <string>
 #include <vector>
 
-#include "core/HttpTracker.hpp"
-#include "core/PieceStorage.hpp"
-#include "core/TorrentFile.hpp"
 #include "core/TorrentTask.hpp"
-#include "net/PeerConnection.hpp"
-#include "net/PeerManager.hpp"
-#include "utils/Timer.hpp"
+
+namespace tclient {
+
+class TorrentSession;
 
 class TorrentClient {
 public:
     explicit TorrentClient(const std::string& peer_id = "TESTAPPDONTWORRY");
-    ~TorrentClient() = default;
+    ~TorrentClient();
 
     void DownloadTorrent(
         const std::filesystem::path& torrent_file_path,
         const std::filesystem::path& output_directory
     );
 
-    const std::string& GetPeerId() const { return peer_id; }
-    void SetPeerId(const std::string& new_peer_id) { peer_id = new_peer_id; }
-
+    const std::string& GetPeerId() const;
     TorrentTask GetCurrentTask() const;
     std::vector<std::string> GetLogMessages(size_t max_count = 50) const;
-    
-    bool IsDownloading() const;
+
     bool IsFinished() const;
-    
     std::chrono::seconds ElapsedTime() const;
 
 private:
-    static constexpr int kPiecesLeftToEnterEndgame = 20;
+    static constexpr int kListenPort = 12345;
+
+    std::mt19937 random_engine;
+    std::uniform_int_distribution<int> char_dist =
+        std::uniform_int_distribution<int>('a', 'z');
 
     std::string peer_id;
-    std::atomic<bool> is_terminated{false};
 
-    mutable std::mutex task_mutex;
-    TorrentTask current_task;
+    mutable std::mutex session_mutex;
 
-    mutable std::mutex log_mutex;
-    std::vector<std::string> log_messages;
+    std::unique_ptr<TorrentSession> active_session;
 
-    mutable std::mutex peer_connections_mutex;
-    std::vector<std::shared_ptr<PeerConnection>> peer_connections;
-    
-    Timer timer;
-    PeerManager peer_manager;
-
-    static constexpr std::array kDefaultTrackers = {
-        "udp://tracker.opentrackr.org:1337/announce",
-        "udp://open.stealth.si:80/announce",
-        "udp://exodus.desync.com:6969/announce",
-        "udp://tracker.torrent.eu.org:451/announce",
-
-        "udp://tracker.openbittorrent.com:80/announce",
-        "udp://tracker.internetwarriors.net:1337/announce",
-        "udp://tracker.leechers-paradise.org:6969/announce",
-
-        "udp://tracker.dler.org:6969/announce",
-        "udp://tracker.moeking.me:6969/announce",
-        "udp://tracker.uw0.xyz:6969/announce",
-
-        "udp://tracker.bittor.pw:1337/announce",
-        "udp://opentracker.io:6969/announce",
-        "udp://tracker.dump.cl:6969/announce",
-
-        "udp://explodie.org:6969/announce",
-        "udp://tracker.filemail.com:6969/announce",
-
-        "udp://tracker.tryhackx.org:6969/announce",
-        "udp://tracker-udp.gbitt.info:80/announce"
-    };
+    std::atomic<bool> is_terminated = false;
 
 private:
-    void AddLogMessage(const std::string& message);
-    void UpdateTaskStatus(TorrentStatus status);
-    void UpdateTaskFromPieceStorage(const PieceStorage& storage);
-    void UpdateTaskFromTracker(const HttpTracker& tracker);
-
     std::string GenerateRandomSuffix(size_t length = 4);
-
-    bool RunDownloadMultithread(
-        PieceStorage& pieces,
-        const TorrentFile& torrent_file,
-        const HttpTracker& tracker
-    );
-
-    void DownloadFromTracker(
-        const TorrentFile& torrent_file,
-        PieceStorage& pieces
-    );
 };
+
+} // namespace tclient
 

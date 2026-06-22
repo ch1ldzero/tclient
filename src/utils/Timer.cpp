@@ -1,5 +1,7 @@
 #include "utils/Timer.hpp"
 
+namespace tclient {
+
 Timer::Timer() :
     is_running(false),
     is_paused(false),
@@ -8,7 +10,7 @@ Timer::Timer() :
 
 void Timer::Start() {
     std::lock_guard<std::mutex> lock(mutex);
-
+    
     if (is_running) {
         return;
     }
@@ -21,7 +23,7 @@ void Timer::Start() {
 
 void Timer::Pause() {
     std::lock_guard<std::mutex> lock(mutex);
-
+    
     if (!is_running || is_paused) {
         return;
     }
@@ -32,7 +34,7 @@ void Timer::Pause() {
 
 void Timer::Resume() {
     std::lock_guard<std::mutex> lock(mutex);
-
+    
     if (!is_running || !is_paused) {
         return;
     }
@@ -43,7 +45,7 @@ void Timer::Resume() {
 
 void Timer::Stop() {
     std::lock_guard<std::mutex> lock(mutex);
-
+    
     if (!is_running) {
         return;
     }
@@ -58,21 +60,24 @@ void Timer::Stop() {
 
 void Timer::Reset() {
     std::lock_guard<std::mutex> lock(mutex);
-
     is_running = false;
     is_paused = false;
     elapsed_time = std::chrono::nanoseconds(0);
 }
 
 std::chrono::nanoseconds Timer::Elapsed() const {
-    if (!is_running.load()) {
+    std::lock_guard<std::mutex> lock(mutex);
+    
+    if (!is_running) {
         return elapsed_time;
     }
-
-    if (is_paused.load()) {
+    
+    if (is_paused) {
         return elapsed_time;
     }
-
+    
     return elapsed_time + (clock::now() - start_point);
 }
+
+} // namespace tclient
 

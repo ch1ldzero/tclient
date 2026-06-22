@@ -1,51 +1,35 @@
 #include "core/TorrentFile.hpp"
 
-#include <vector>
-
-#include <openssl/sha.h>
-
 #include "utils/BencodeParser.hpp"
 
-TorrentFile LoadTorrentFile(const std::string& filename) {
+namespace tclient {
+
+TorrentFile TorrentFile::Load(const std::string& filename) {
     TorrentFile result;
 
-    utils::BencodeParser bencode_parser;
-    auto res = bencode_parser.ParseFromFile(filename);
+    auto parse_result = BencodeParser::ParseFile(filename);
+    const auto& dict = parse_result.info_dict;
 
-    for (size_t i = 0; i < res.size(); ++i) {
-        if (res[i] == "announce") {
-            ++i;
-            result.announce = res[i];
-            continue;
-        }
-
-        if (res[i] == "comment") {
-            ++i;
-            result.comment = res[i];
-            continue;
-        }
-
-        if (res[i] == "piece length") {
-            ++i;
-            result.piece_length = std::stol(res[i]);
-            continue;
-        }
-
-        if (res[i] == "length") {
-            ++i;
-            result.length = std::stol(res[i]);
-            continue;
-        }
-
-        if (res[i] == "name") {
-            ++i;
-            result.name = res[i];
-            continue;
-        }
+    if (auto it = dict.find("announce"); it != dict.end()) {
+        result.announce = it->second;
+    }
+    if (auto it = dict.find("comment"); it != dict.end()) {
+        result.comment = it->second;
+    }
+    if (auto it = dict.find("piece length"); it != dict.end()) {
+        result.piece_length = static_cast<size_t>(std::stoull(it->second));
+    }
+    if (auto it = dict.find("length"); it != dict.end()) {
+        result.length = static_cast<size_t>(std::stoull(it->second));
+    }
+    if (auto it = dict.find("name"); it != dict.end()) {
+        result.name = it->second;
     }
 
-    result.info_hash = bencode_parser.GetInfoHash();
-    result.piece_hashes = bencode_parser.GetPieceHashes();
+    result.info_hash = parse_result.info_hash;
+    result.piece_hashes = parse_result.piece_hashes;
     return result;
 }
+
+} // namespace tclient
 

@@ -1,49 +1,72 @@
-add_library(core STATIC
-    core/HttpTracker.cpp
-    core/Piece.cpp
-    core/PieceStorage.cpp
+add_library(tclient_lib STATIC
     core/TorrentClient.cpp
     core/TorrentFile.cpp
+    core/TorrentSession.cpp
+    core/TorrentSnapshot.cpp
     core/TorrentTask.cpp
-    core/UdpTracker.cpp
-    net/HttpClient.cpp
-    net/Message.cpp
-    net/PeerConnection.cpp
-    net/PeerManager.cpp
+
+    download/DownloadMonitor.cpp
+    download/PiecePicker.cpp
+
+    net/HttpConnection.cpp
     net/TcpConnection.cpp
     net/UdpConnection.cpp
+
+    peer/Message.cpp
+    peer/PeerConnector.cpp
+    peer/PeerManager.cpp
+    peer/PeerSession.cpp
+
+    storage/Piece.cpp
+    storage/PieceStorage.cpp
+
+    tracker/HttpTracker.cpp
+    tracker/ITracker.cpp
+    tracker/TrackerFactory.cpp
+    tracker/TrackerManager.cpp
+    tracker/UdpTracker.cpp
+
     utils/BencodeParser.cpp
-    utils/byte_tools.cpp
+    utils/Logger.cpp
     utils/Sha1.cpp
     utils/Timer.cpp
+    utils/byte_tools.cpp
 )
 
-target_include_directories(core PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
+target_include_directories(tclient_lib
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
 )
 
-target_include_directories(core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-)
-
-add_executable(torrent-client
+add_executable(tclient
     main.cpp
     ui/TorrentUi.cpp
     ui/UiFormatter.cpp
     ui/UiRenderer.cpp
 )
 
-target_include_directories(torrent-client PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
+target_link_libraries(tclient
+    PRIVATE
+        tclient_lib
 )
 
-target_link_libraries(torrent-client
-    core
+target_include_directories(tclient
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}
 )
 
-install(TARGETS torrent-client
+target_compile_options(tclient
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+install(TARGETS tclient
     DESTINATION bin
 )
 

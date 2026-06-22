@@ -2,18 +2,26 @@
 
 #include <atomic>
 
-#include "core/TorrentClient.hpp"
+#include "core/TorrentSnapshot.hpp"
 #include "ui/UiRenderer.hpp"
+
+namespace tclient {
+
+class TorrentClient;
 
 class TorrentUi {
 public:
     explicit TorrentUi(TorrentClient& client);
-
     void Run();
 
 private:
     TorrentClient& client;
     UiRenderer renderer;
-    std::atomic<bool> running {true};
+    std::atomic<bool> is_running = true;
+
+private:
+    TorrentSnapshot BuildSnapshot() const;
 };
+
+} // namespace tclient
 

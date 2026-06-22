@@ -1,8 +1,9 @@
 #pragma once
 
-#include <atomic>
 #include <chrono>
 #include <mutex>
+
+namespace tclient {
 
 class Timer {
 public:
@@ -21,10 +22,12 @@ public:
 private:
     mutable std::mutex mutex;
 
-    std::atomic<bool> is_running;
-    std::atomic<bool> is_paused;
+    bool is_running = false;
+    bool is_paused = false;
 
     clock::time_point start_point;
-    std::chrono::nanoseconds elapsed_time;
+    std::chrono::nanoseconds elapsed_time = std::chrono::nanoseconds(0);
 };
+
+} // namespace tclient
 

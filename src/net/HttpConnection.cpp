@@ -1,18 +1,19 @@
-#include "net/HttpClient.hpp"
+#include "net/HttpConnection.hpp"
 
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
-#include <iomanip>
 
-std::string HttpClient::Get(
-    const std::string& url,
-    const std::map<std::string, std::string>& params,
-    int timeout_sec
+namespace tclient {
+
+std::string HttpConnection::Get(
+    std::string_view url,
+    const std::map<std::string, std::string>& params
 ) const {
     auto [host, path, port] = ParseUrl(url);
 
@@ -21,12 +22,11 @@ std::string HttpClient::Get(
         path += "?" + query;
     }
 
-    addrinfo hints {};
+    addrinfo hints;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     addrinfo* result;
-
     if (
         getaddrinfo(
             host.c_str(),
@@ -38,20 +38,14 @@ std::string HttpClient::Get(
         throw std::runtime_error("getaddrinfo failed");
     }
 
-    int sock = socket(
-        result->ai_family,
-        result->ai_socktype,
-        result->ai_protocol
-    );
-
+    int sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     if (sock < 0) {
         freeaddrinfo(result);
         throw std::runtime_error("socket failed");
     }
 
-    timeval tv{};
-    tv.tv_sec = timeout_sec;
-
+    timeval tv;
+    tv.tv_sec = kTimeout.count();
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
@@ -64,10 +58,13 @@ std::string HttpClient::Get(
     freeaddrinfo(result);
 
     std::ostringstream request;
-
     request
-        << "GET " << path << " HTTP/1.1\r\n"
-        << "Host: " << host << "\r\n"
+        << "GET "
+        << path
+        << " HTTP/1.1\r\n"
+        << "Host: "
+        << host
+        << "\r\n"
         << "Connection: close\r\n"
         << "User-Agent: TorrentClient/1.0\r\n\r\n";
 
@@ -78,9 +75,8 @@ std::string HttpClient::Get(
 
     char buffer[BUFSIZ];
     ssize_t bytes;
-
     while ((bytes = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
-        response.append(buffer, bytes);
+        response.append(buffer, static_cast<size_t>(bytes));
     }
 
     close(sock);
@@ -91,21 +87,16 @@ std::string HttpClient::Get(
     }
 
     std::string headers = response.substr(0, header_end);
-
-    if (
-        headers.find("200 OK") == std::string::npos
-    ) {
+    if (headers.find("200 OK") == std::string::npos) {
         throw std::runtime_error("Tracker returned non-200");
     }
 
     return response.substr(header_end + 4);
 }
 
-ParsedUrl HttpClient::ParseUrl(
-    const std::string& url
-) const {
+ParsedUrl HttpConnection::ParseUrl(std::string_view url) const {
     ParsedUrl request;
-    std::string working = url;
+    std::string working(url);
 
     if (working.starts_with("http://")) {
         request.port = 80;
@@ -132,34 +123,29 @@ ParsedUrl HttpClient::ParseUrl(
     return request;
 }
 
-std::string HttpClient::UrlEncode(const std::string& value) const {
+std::string HttpConnection::UrlEncode(std::string_view value) const {
     std::ostringstream escaped;
-
     escaped.fill('0');
     escaped << std::hex;
 
-    for (unsigned char c : value) {
-        if (
-            std::isalnum(c) ||
-            c == '-' ||
-            c == '_' ||
-            c == '.' ||
-            c == '~'
-        ) {
+    for (size_t i = 0; i < value.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(value[i]);
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
             escaped << c;
         } else {
-            escaped << '%'
-                    << std::uppercase
-                    << std::setw(2)
-                    << int(c)
-                    << std::nouppercase;
+            escaped
+                << '%'
+                << std::uppercase
+                << std::setw(2)
+                << static_cast<int>(c)
+                << std::nouppercase;
         }
     }
 
     return escaped.str();
 }
 
-std::string HttpClient::BuildQuery(
+std::string HttpConnection::BuildQuery(
     const std::map<std::string, std::string>& params
 ) const {
     std::ostringstream oss;
@@ -169,12 +155,12 @@ std::string HttpClient::BuildQuery(
         if (!first) {
             oss << "&";
         }
-
         first = false;
-
         oss << key << "=" << UrlEncode(value);
     }
 
     return oss.str();
 }
+
+} // namespace tclient
 

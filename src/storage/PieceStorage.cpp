@@ -1,16 +1,20 @@
-#include "core/PieceStorage.hpp"
+#include "storage/PieceStorage.hpp"
 
 #include <algorithm>
 #include <stdexcept>
+
+#include "utils/Logger.hpp"
+
+namespace tclient {
 
 PieceStorage::PieceStorage(
     const TorrentFile& torrent_file,
     const std::filesystem::path& output_directory
 ) :
-      output_directory(output_directory),
-      default_piece_length(torrent_file.piece_length),
-      total_piece_count(torrent_file.piece_hashes.size()),
-      torrent_file(torrent_file)
+    output_directory(output_directory),
+    default_piece_length(torrent_file.piece_length),
+    total_piece_count(torrent_file.piece_hashes.size()),
+    torrent_file(torrent_file)
 {
     for (size_t i = 0; i < total_piece_count; ++i) {
         size_t len;
@@ -21,7 +25,7 @@ PieceStorage::PieceStorage(
         }
 
         remaining_pieces_queue.push(
-            std::make_shared<Piece>(i, len, torrent_file.piece_hashes[i])
+            std::make_shared<Piece>(i, len, std::move(torrent_file.piece_hashes[i]))
         );
     }
 
@@ -32,13 +36,17 @@ void PieceStorage::InitializeOutputFile() {
     std::filesystem::create_directories(output_directory);
     auto filename = (output_directory / torrent_file.name).string();
 
-    file.open(filename, std::ios::binary | std::ios::out | std::ios::trunc);
-    if (!file.is_open()) {
+    output_file.open(filename, std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!output_file.is_open()) {
         throw std::runtime_error("Failed to open output file");
     }
 
-    file.seekp(torrent_file.length - 1);
-    file.write("", 1);
+    if (torrent_file.length > 0) {
+        output_file.seekp(static_cast<std::streamoff>(torrent_file.length - 1));
+        char zero = '\0';
+        output_file.write(&zero, 1);
+        output_file.seekp(0);
+    }
 }
 
 PiecePtr PieceStorage::GetNextPieceToDownload() {
@@ -50,13 +58,11 @@ PiecePtr PieceStorage::GetNextPieceToDownload() {
 
     auto piece = remaining_pieces_queue.front();
     remaining_pieces_queue.pop();
-
     active_pieces.insert(piece->GetIndex());
-
     return piece;
 }
 
-void PieceStorage::Enqueue(const PiecePtr& piece) {
+void PieceStorage::ReturnPiece(const PiecePtr& piece) {
     if (!piece) {
         return;
     }
@@ -84,7 +90,12 @@ void PieceStorage::PieceProcessed(const PiecePtr& piece) {
     }
 
     if (!piece->HashMatches()) {
-        Enqueue(piece);
+        Logger::LogUI(
+            "Piece " +
+            std::to_string(piece->GetIndex()) +
+            " hash mismatch, re-downloading"
+        );
+        ReturnPiece(piece);
         return;
     }
 
@@ -98,9 +109,12 @@ void PieceStorage::SavePieceToDisk(const PiecePtr& piece) {
         return;
     }
 
-    file.seekp(piece->GetIndex() * default_piece_length);
+    output_file.seekp(
+        static_cast<std::streamoff>(piece->GetIndex() * default_piece_length)
+    );
+
     const auto& data = piece->GetData();
-    file.write(data.data(), data.size());
+    output_file.write(data.data(), static_cast<std::streamsize>(data.size()));
 
     saved_pieces.insert(piece->GetIndex());
 }
@@ -129,13 +143,14 @@ size_t PieceStorage::TotalPiecesCount() const {
     return total_piece_count;
 }
 
-size_t PieceStorage::PiecesSavedToDiscCount() const {
+size_t PieceStorage::PiecesSavedToDiskCount() const {
     std::lock_guard<std::mutex> lock(file_mutex);
     return saved_pieces.size();
 }
 
 std::vector<size_t> PieceStorage::GetMissingPieces() const {
     std::lock_guard<std::mutex> lock(file_mutex);
+
     std::vector<size_t> missing;
     missing.reserve(total_piece_count - saved_pieces.size());
 
@@ -157,9 +172,7 @@ void PieceStorage::ForceRequeueMissingPieces() {
     std::swap(remaining_pieces_queue, empty);
 
     for (size_t i = 0; i < total_piece_count; ++i) {
-        if (saved_pieces.contains(i)) {
-            continue;
-        }
+        if (saved_pieces.contains(i)) continue;
 
         size_t len;
         if (i + 1 == total_piece_count) {
@@ -176,9 +189,11 @@ void PieceStorage::ForceRequeueMissingPieces() {
 
 void PieceStorage::CloseOutputFile() {
     std::lock_guard<std::mutex> lock(file_mutex);
-    if (file.is_open()) {
-        file.flush();
-        file.close();
+    if (output_file.is_open()) {
+        output_file.flush();
+        output_file.close();
     }
 }
+
+} // namespace tclient
 

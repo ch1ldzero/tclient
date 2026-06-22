@@ -1,24 +1,28 @@
-#include "core/Piece.hpp"
+#include "storage/Piece.hpp"
 
 #include <algorithm>
 
+#include "utils/Sha1.hpp"
 #include "utils/byte_tools.hpp"
 
-Piece::Piece(size_t index, size_t length, const std::string& hash) :
+namespace tclient {
+
+Piece::Piece(size_t index, size_t length, std::string hash) :
     index(index),
     length(length),
-    hash(hash),
+    hash(std::move(hash)),
     bytes_downloaded(0)
 {
     size_t offset = 0;
     while (offset < length) {
         size_t block_length = std::min(Block::kSize, length - offset);
-        blocks.push_back(Block{
+        blocks.emplace_back(
             index,
             offset,
             block_length,
-            Block::Status::kMissing, ""
-        });
+            Block::Status::kMissing,
+            ""
+        );
         offset += block_length;
     }
 }
@@ -27,12 +31,7 @@ bool Piece::HashMatches() const {
     if (!AllBlocksRetrieved()) {
         return false;
     }
-
-    std::string piece_data = GetData();
-    std::string calculated_hash = utils::calculate_sha1(piece_data);
-    bool matches = (calculated_hash == hash);
-
-    return matches;
+    return Sha1::ComputeHex(GetData()) == bytes_to_hex(hash);
 }
 
 Block* Piece::GetFirstMissingBlock() {
@@ -49,73 +48,72 @@ size_t Piece::GetIndex() const {
     return index;
 }
 
-void Piece::SaveBlock(size_t block_offset, std::string block_data) {
+void Piece::SaveBlock(size_t block_offset, std::string_view data) {
     for (auto& block : blocks) {
         if (block.offset == block_offset) {
             if (block.status != Block::Status::kPending) {
-                throw std::runtime_error(
-                    "Block at offset " +
-                    std::to_string(block_offset) +
-                    " is not in pending state"
-                );
+                return;
             }
-
-            block.data = std::move(block_data);
+            block.data = data;
             block.status = Block::Status::kRetrieved;
             bytes_downloaded += block.data.size();
+            cached_data.clear();
             return;
         }
     }
-
-    throw std::runtime_error(
-        "Block not found at offset " +
-        std::to_string(block_offset)
-    );
 }
 
 bool Piece::AllBlocksRetrieved() const {
-    auto is_retreived = [](const Block& block) {
-        return block.status == Block::Status::kRetrieved;
-    };
-    return std::all_of(blocks.begin(), blocks.end(), is_retreived);
+    for (const auto& block : blocks) {
+        if (block.status != Block::Status::kRetrieved) {
+            return false;
+        }
+    }
+    return true;
 }
 
-std::string Piece::GetData() const {
-    std::string result;
-    result.reserve(length);
+const std::string& Piece::GetData() const {
+    if (!cached_data.empty()) {
+        return cached_data;
+    }
 
+    cached_data.reserve(length);
     for (const auto& block : blocks) {
         if (block.status == Block::Status::kRetrieved) {
-            result += block.data;
+            cached_data += block.data;
         } else {
-            result.append(block.length, '\0');
+            cached_data.append(block.length, '\0');
         }
     }
 
-    return result;
+    return cached_data;
 }
 
 std::string Piece::GetDataHash() const {
-    return utils::calculate_sha1(GetData());
+    return Sha1::ComputeHex(GetData());
 }
 
-std::string Piece::GetHash() const {
+const std::string& Piece::GetHash() const {
     return hash;
 }
 
 void Piece::Reset() {
     bytes_downloaded = 0;
+    cached_data.clear();
     for (auto& block : blocks) {
         block.status = Block::Status::kMissing;
         block.data.clear();
+        block.data.shrink_to_fit();
     }
 }
 
 bool Piece::IsDownloading() const {
-    auto is_downloading = [](const Block& block) {
-        return block.status == Block::Status::kPending;
-    };
-    return std::any_of(blocks.begin(), blocks.end(), is_downloading);
+    for (const auto& block : blocks) {
+        if (block.status == Block::Status::kPending) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Piece::IsComplete() const {
@@ -129,4 +127,6 @@ size_t Piece::GetLength() const {
 size_t Piece::GetBytesDownloaded() const {
     return bytes_downloaded;
 }
+
+} // namespace tclient
 
