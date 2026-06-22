@@ -1,107 +1,93 @@
-### Torrent-Client
+# tclient
 
-A BitTorrent client written in C++ that supports downloading **single-file torrents** using **HTTP and UDP trackers**.  
+A BitTorrent client written in C++20 that supports downloading **single-file torrents** using **HTTP and UDP trackers**.  
 The project features a **multi-threaded architecture** and a self-written **text-based user interface (TUI)**.
-No external libraries are required.
 
-**Note 1:**
+No external libraries are required — all networking is implemented using plain POSIX sockets.
+
 This project originally started as a university assignment and is now being refactored and improved.
 
-**Note 2:**
-All networking operations (HTTP and UDP tracker communation, peer-to-peer communication, and piece downloading from peers) are implemented using plain POSIX sockets.
-
 ## Screenshots
+
+<details>
+<summary>Show screenshots</summary>
+
 ![Download In Progress](assets/images/downloading.png)
-![Download completed](assets/images/finished.png)
+![Download Completed](assets/images/finished.png)
+
+</details>
+
+[Example Log File](assets/tclient.log)
 
 ## Features
-- Single-file torrent downloads
-- Multi-threaded peer connections
-- HTTP and UDP tracker support
-- Compact peer protocol support
-- Text User Interface (TUI)
 
-## Dependencies
-Required
-- C++20 compatible compiler
-- CMake (3.14 or higher)
+- Single-file torrent downloads
+- Multi-threaded peer connections (up to 50 concurrent)
+- HTTP and UDP tracker support
+- Endgame mode for faster completion
+- Text User Interface (TUI) with live progress and log
+- Text log file
 
 ## Build
-```bash
-git clone https://github.com/n3tw4lk3r/Torrent-Client
-cd Torrent-Client
-mkdir build && cd build
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
-make -j$(nproc)
 
+Requirements:
+
+- CMake 3.14+
+- C++20-compatible compiler
+
+```bash
+git clone https://github.com/n3tw4lk3r/tclient
+cd tclient
+mkdir build && cd build
+cmake ..
+cmake --build .
 ```
+
 ## Usage
 
 ```bash
-# in Torrent-Client/build
-# make sure you have output-directory created
-src/simple-torrent-tui <torrent-file> <output-directory>
+# inside build/
+src/tclient <torrent-file> <output-directory>
 ```
 
 ### Example
 
 ```bash
-# in Torrent-Client/build
-# downloads is created before executing the command
-src/simple-torrent-tui ../resources/ubuntu-25.10-live-server-amd64.iso.torrent downloads
+# inside build/
+src/tclient ../resources/archlinux-2026.06.01-x86_64.iso.torrent downloads
 ```
 
-## Main Components
+Log file `tclient.log` will appear inside `build/`.
 
-The project is split into several logical modules, each responsible for a distinct part of the BitTorrent protocol and application workflow.
+## Architecture
 
-### Core
+Project structure:
 
-- **TorrentClient**  
-  The central orchestrator of the download process.  
-  Coordinates trackers, peer connections, piece storage, and overall torrent state.
-
-- **TorrentFile**  
-  Represents parsed .torrent metadata, including piece hashes, announce URLs, and file information.
-
-- **HttpTracker**  
-  Handles communication with HTTP/TCP trackers.
-
-- **UdpTracker**  
-  Handles communication with UDP trackers.
-
-- **PieceStorage**  
-  Manages torrent pieces and blocks, tracks download progress, verifies piece hashes, and writes completed data to disk.
-
-- **Piece**  
-  Represents a single torrent piece split into blocks and tracks block-level download state.
-
-### Networking
-
-- **PeerConnection**  
-  Manages communication with a single peer: handshake, bitfield exchange, piece requests, and message processing.
-
-- **TcpConnection**  
-  Low-level abstraction over TCP sockets used for peer communication.
-
-- **UdpConnection**  
-  Wrapper over UDP sockets, used primarily for tracker communication.
-
-### Protocol & Utilities
-
-- **Message**  
-  Encapsulates BitTorrent peer protocol messages and provides parsing and serialization logic.
-
-- **BencodeParser**  
-  Parses Bencode-encoded data from strings and .torrent files.
+- `core/`
+  - Client entry point, file parsing, download orchestration and state snapshotting
+- `download/`
+  - Piece picking logic and download progress monitoring
+- `net/`
+  - TCP, UDP and HTTP connection abstractions
+- `peer/`
+  - Peer protocol messages, peer connection management and session handling
+- `storage/`
+  - Piece and block management, persistent storage to disk
+- `tracker/`
+  - Tracker interface, HTTP/UDP tracker implementations and factory
+- `ui/`
+  - Terminal UI rendering with live progress bars and log display
+- `utils/`
+  - SHA-1 hashing, Bencode parser, byte utilities, timer and logger
 
 ## Limitations
+
 - Supports only single-file torrents (no multi-file/directory structure)
 - No seeding/upload capability
 - No DHT support
 - No magnet link support
 
-## Planned Features and Fixes:
+## Planned
 
 ### Near Future
 - Calculate and display download speed
@@ -109,4 +95,3 @@ The project is split into several logical modules, each responsible for a distin
 ### Someday
 - Multi-file torrent support
 - Seeding/upload support
-
