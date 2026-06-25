@@ -36,7 +36,7 @@ Requirements:
 - C++20-compatible compiler
 
 ```bash
-git clone https://github.com/n3tw4lk3r/tclient
+git clone https://github.com/ch1ldzero/tclient
 cd tclient
 mkdir build && cd build
 cmake ..
