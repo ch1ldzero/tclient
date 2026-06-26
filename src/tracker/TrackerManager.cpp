@@ -165,7 +165,7 @@ void TrackerManager::BackgroundUpdateLoop(TorrentFile torrent_file) {
 
         size_t known_peers = peer_manager.Count();
 
-        if (active_connections < 50 && known_peers < 200) {
+        if (active_connections < 70 && known_peers < 500) {
             Logger::LogUi(
                 "Requesting more peers (active: " +
                 std::to_string(active_connections) + "/50)..."
@@ -214,7 +214,7 @@ void TrackerManager::BackgroundUpdateLoop(TorrentFile torrent_file) {
                     );
                 }
             }
-        } else if (active_connections >= 50) {
+        } else if (active_connections >= 70) {
             Logger::LogUi(
                 "Have " +
                 std::to_string(active_connections) +

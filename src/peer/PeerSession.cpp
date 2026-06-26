@@ -198,7 +198,9 @@ void PeerSession::MainLoop() {
         if (!is_choked) {
             while (inflight_offsets.size() < kMaxInflightBlocks) {
                 Block* block = piece_in_progress->GetFirstMissingBlock();
-                if (!block) break;
+                if (!block) {
+                    break;
+                }
 
                 RequestBlock(block);
                 inflight_offsets.insert(block->offset);
@@ -215,7 +217,9 @@ void PeerSession::MainLoop() {
 PiecePtr PeerSession::GetNextAvailablePiece() {
     for (size_t i = 0; i < 100 && !is_terminated; ++i) {
         auto piece = piece_storage.GetNextPieceToDownload();
-        if (!piece) return nullptr;
+        if (!piece) {
+            return nullptr;
+        }
 
         if (pieces_availability.IsPieceAvailable(piece->GetIndex())) {
             return piece;

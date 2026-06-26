@@ -30,11 +30,12 @@ public:
 
 private:
     static constexpr size_t kMaxMessageSize = 100'000;
+    static constexpr int kBufferSize = 1024 * 1024; // 1 MB
 
     static constexpr std::chrono::milliseconds kConnectTimeout =
-        std::chrono::milliseconds(1'500);
+        std::chrono::milliseconds(2'000);
     static constexpr std::chrono::milliseconds kReadTimeout =
-        std::chrono::milliseconds(1'500);
+        std::chrono::milliseconds(5'000);
 
     const std::string ip;
     const int port;

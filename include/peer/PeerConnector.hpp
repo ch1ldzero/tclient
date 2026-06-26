@@ -44,7 +44,7 @@ private:
     static constexpr std::chrono::seconds kPeerDiscoveryInterval =
         std::chrono::seconds(2);
 
-    static constexpr size_t kMaxConnections = 50;
+    static constexpr size_t kMaxConnections = 70;
 
     std::string self_peer_id;
     PeerManager& peer_manager;

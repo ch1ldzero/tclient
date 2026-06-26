@@ -43,7 +43,7 @@ public:
 
 private:
     static constexpr size_t kMaxFailures = 5;
-    static constexpr size_t kMaxInflightBlocks = 256;
+    static constexpr size_t kMaxInflightBlocks = 1024;
 
     class PeerPiecesAvailability {
     public:

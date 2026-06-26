@@ -33,7 +33,7 @@ public:
 
 private:
     static constexpr std::chrono::seconds kUpdateInterval =
-        std::chrono::seconds(15);
+        std::chrono::seconds(10);
 
     std::string self_peer_id;
     int listen_port;
@@ -46,7 +46,9 @@ private:
     std::thread background_thread;
 
 private:
-    void LoadDefaultTrackersFromConfig(const std::filesystem::path& tracker_config_path);
+    void LoadDefaultTrackersFromConfig(
+        const std::filesystem::path& tracker_config_path
+    );
 
     std::vector<std::string> CollectTrackerUrls(const TorrentFile& torrent_file);
 

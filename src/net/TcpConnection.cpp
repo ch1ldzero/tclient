@@ -97,9 +97,8 @@ void TcpConnection::EstablishConnection() {
     setsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
     setsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
 
-    int buffer_size = 2 * 1024 * 1024;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size));
-    setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size));
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &kBufferSize, sizeof(kBufferSize));
+    setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, &kBufferSize, sizeof(kBufferSize));
 
     struct sockaddr_in server;
     server.sin_addr.s_addr = inet_addr(ip.c_str());
